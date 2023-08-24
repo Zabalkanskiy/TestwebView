@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "340871794174",
+    "project_id": "test-webview-daddb",
+    "storage_bucket": "test-webview-daddb.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:340871794174:android:9e15d5cc45317cd56fc4af",
+        "android_client_info": {
+          "package_name": "test.zadanie.app.com"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "340871794174-l4gm75msif796kqr4kaod7rshe0inn8v.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD8qg8-h4iOkx8n7fGvoHPTdMH5-IQXeIs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "340871794174-l4gm75msif796kqr4kaod7rshe0inn8v.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
