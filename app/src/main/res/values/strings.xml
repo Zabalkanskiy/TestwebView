@@ -1,3 +1,10 @@
 <resources>
     <string name="app_name">Test webView</string>
+    <string name="sign_up">SIGN UP</string>
+    <string name="create_account">Create Account</string>
+    <string name="password">Password</string>
+    <string name="email">Email</string>
+    <string name="welcome">Welcome</string>
+    <string name="login">LOGIN</string>
+    <string name="web_adress">Enter web adress</string>
 </resources>

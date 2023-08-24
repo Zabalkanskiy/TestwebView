@@ -1,32 +1,38 @@
 package test.zadanie.app.com
 
+import android.app.DownloadManager
 import android.content.Context
+import android.content.DialogInterface
 import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.os.Environment
-import android.os.Parcelable
-import android.provider.MediaStore
-import android.util.Log
+import android.text.Editable
+import android.text.TextWatcher
+import android.view.KeyEvent
 import android.view.View
+import android.view.inputmethod.InputMethodManager
 import android.webkit.CookieManager
+import android.webkit.DownloadListener
+import android.webkit.URLUtil
 import android.webkit.ValueCallback
-import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Button
+import android.widget.EditText
+import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
+import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.ViewModelProvider
-import java.io.File
-import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.Date
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+
 
 class MainActivity : AppCompatActivity() {
     lateinit var viewModelTest: ViewModelTest
-    lateinit var webView: WebView
+    private var webView: WebView? = null
     private var mUploadMessage: ValueCallback<Uri?>? = null
     private var mCapturedImageURI: Uri? = null
     private var mFilePathCallback: ValueCallback<Array<Uri>>? = null
@@ -34,36 +40,111 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        onBackPressedDispatcher.addCallback(this,onBackPressedCallback)
         val remoteString: String = loadRemoteString(context = this)
-        if(remoteString == ""){
+
             //internetCall
+        if (isOnline()){
             viewModelTest = ViewModelProvider(this).get(ViewModelTest::class.java)
             viewModelTest.getWeather(viewModelTest.testUrl)
             viewModelTest.urlString.observe(this) { observ ->
-                webViewActivity(savedInstanceState = savedInstanceState, remoteUrl = observ)
-            }
-        } else {
+                if(observ == "URL_NOT_FOUND"){
 
+                    formViewActivity(savedInstanceState = savedInstanceState)
+                } else{
+                    var urlString = loadURLString(this)
+                    if(urlString == ""){ urlString = observ }
+                    webViewActivity(savedInstanceState = savedInstanceState, remoteUrl = urlString)
+                }
+
+            }
+
+        } else{
+            showNotInternetDialog()
         }
-        setContentView(R.layout.activity_main)
+
+
+
     }
 
+    fun formViewActivity(savedInstanceState: Bundle?){
+        setContentView(R.layout.activity_wellcome)
+        val buttonSignUp = findViewById<Button>(R.id.login_btn_sign_up)
+        buttonSignUp.setOnClickListener{
+            val intent = Intent(this, RegistrationActivity::class.java)
+            startActivity(intent)
+        }
+        val buttonLogin = findViewById<Button>(R.id.login_btn_login)
+        buttonLogin.setOnClickListener{
+          val intent = Intent(this, LoginActivity::class.java)
+            startActivity(intent)
+
+        }
+    }
     fun webViewActivity(savedInstanceState: Bundle?, remoteUrl:String){
         setContentView(R.layout.web_view_activity)
+        val editTextAdress = findViewById<EditText>(R.id.web_view_editText)
+        editTextAdress.setText(webView?.url.toString())
+
+
+
+
+
+
         webView = findViewById(R.id.webView)
-        webView?.webViewClient= WebViewClient()
-        webView!!.webChromeClient = ChromeClient()
+        webView?.webViewClient= MyViewViewClient(editTextAdress)
+
+
+
+      editTextAdress.setOnKeyListener(View.OnKeyListener { v, keyCode, event ->
+          if (keyCode == KeyEvent.KEYCODE_ENTER  && event.action == KeyEvent.ACTION_UP ) {
+              //Perform Code
+
+             val text =  editTextAdress.text.toString()
+              webView?.loadUrl(text)
+
+              this.currentFocus?.let { view ->
+                  val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                  imm?.hideSoftInputFromWindow(view.windowToken, 0)
+              }
+              return@OnKeyListener true
+          }
+          false
+      })
+        //webView!!.webChromeClient = ChromeClient()
         var webSettings = webView?.settings
         webSettings?.javaScriptEnabled = true
         webSettings?.loadWithOverviewMode =true
         webSettings?.useWideViewPort =true
         webSettings?.domStorageEnabled =true
         webSettings?.databaseEnabled = true
-        webSettings?.setSupportZoom(false)
+        webSettings?.setSupportZoom(true)
         webSettings?.allowFileAccess = true
         webSettings?.allowContentAccess = true
         webSettings?.loadWithOverviewMode =true
         webSettings?.useWideViewPort =true
+        webView?.setDownloadListener(DownloadListener { url, userAgent, contentDisposition, mimetype, contentLength ->
+            val request = DownloadManager.Request(
+                Uri.parse(url)
+            )
+
+           // request.allowScanningByMediaScanner()
+
+            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED) //Notify client once download is completed!
+            request.setDestinationInExternalPublicDir(
+                Environment.DIRECTORY_DOWNLOADS,
+                URLUtil.guessFileName(
+                    url, contentDisposition, mimetype)
+            )
+            val dm = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
+            dm.enqueue(request)
+            Toast.makeText(
+                applicationContext,
+                "Downloading File",  //To notify the Client that the file is being downloaded
+                Toast.LENGTH_LONG
+            ).show()
+        })
+
 
 
 
@@ -78,129 +159,9 @@ class MainActivity : AppCompatActivity() {
         cookieManager.setAcceptCookie(true)
     }
 
-    inner class ChromeClient : WebChromeClient() {
-        // For Android 5.0
-        override fun onShowFileChooser(
-            view: WebView,
-            filePath: ValueCallback<Array<Uri>>,
-            fileChooserParams: FileChooserParams
-        ): Boolean {
-            // Double check that we don't have any existing callbacks
-            if (mFilePathCallback != null) {
-                mFilePathCallback!!.onReceiveValue(null)
-            }
-            mFilePathCallback = filePath
-            var takePictureIntent: Intent? = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
-            if (takePictureIntent!!.resolveActivity(packageManager) != null) {
-                // Create the File where the photo should go
-                var photoFile: File? = null
-                try {
-                    photoFile = createImageFile()
-                    takePictureIntent.putExtra("PhotoPath", mCameraPhotoPath)
-                } catch (ex: IOException) {
-                    // Error occurred while creating the File
-                    Log.e("ErrorCreatingFile", "Unable to create Image File", ex)
-                }
-
-                // Continue only if the File was successfully created
-                if (photoFile != null) {
-                    mCameraPhotoPath = "file:" + photoFile.absolutePath
-                    takePictureIntent.putExtra(
-                        MediaStore.EXTRA_OUTPUT,
-                        Uri.fromFile(photoFile)
-                    )
-                } else {
-                    takePictureIntent = null
-                }
-            }
-            val contentSelectionIntent = Intent(Intent.ACTION_GET_CONTENT)
-            contentSelectionIntent.addCategory(Intent.CATEGORY_OPENABLE)
-            contentSelectionIntent.type = "image/*"
-            val intentArray: Array<Intent?>
-            intentArray = takePictureIntent?.let { arrayOf(it) } ?: arrayOfNulls(0)
-            val chooserIntent = Intent(Intent.ACTION_CHOOSER)
-            chooserIntent.putExtra(Intent.EXTRA_INTENT, contentSelectionIntent)
-            chooserIntent.putExtra(Intent.EXTRA_TITLE, "Image Chooser")
-            chooserIntent.putExtra(Intent.EXTRA_INITIAL_INTENTS, intentArray)
-            startActivityForResult(chooserIntent, INPUT_FILE_REQUEST_CODE)
-            return true
-        }
-
-        // openFileChooser for Android 3.0+
-        // openFileChooser for Android < 3.0
-        @JvmOverloads
-        fun openFileChooser(uploadMsg: ValueCallback<Uri?>?, acceptType: String? = "") {
-            mUploadMessage = uploadMsg
-            // Create AndroidExampleFolder at sdcard
-            // Create AndroidExampleFolder at sdcard
-            val imageStorageDir = File(
-                Environment.getExternalStoragePublicDirectory(
-                    Environment.DIRECTORY_PICTURES
-                ), "AndroidExampleFolder"
-            )
-            if (!imageStorageDir.exists()) {
-                // Create AndroidExampleFolder at sdcard
-                imageStorageDir.mkdirs()
-            }
-
-            // Create camera captured image file path and name
-            val file = File(
-                imageStorageDir.toString() + File.separator + "IMG_"
-                        + System.currentTimeMillis().toString() + ".jpg"
-            )
-            mCapturedImageURI = Uri.fromFile(file)
-
-            // Camera capture image intent
-            val captureIntent = Intent(
-                MediaStore.ACTION_IMAGE_CAPTURE
-            )
-            captureIntent.putExtra(MediaStore.EXTRA_OUTPUT, mCapturedImageURI)
-            val i = Intent(Intent.ACTION_GET_CONTENT)
-            i.addCategory(Intent.CATEGORY_OPENABLE)
-            i.type = "image/*"
-
-            // Create file chooser intent
-            val chooserIntent = Intent.createChooser(i, "Image Chooser")
-
-            // Set camera intent to file chooser
-            chooserIntent.putExtra(
-                Intent.EXTRA_INITIAL_INTENTS, arrayOf<Parcelable>(captureIntent)
-            )
-
-            // On select image call onActivityResult method of activity
-            startActivityForResult(chooserIntent, FILECHOOSER_RESULTCODE)
-        }
-
-
-        //openFileChooser for other Android versions
-        fun openFileChooser(
-            uploadMsg: ValueCallback<Uri?>?,
-            acceptType: String?,
-            capture: String?
-        ) {
-            openFileChooser(uploadMsg, acceptType)
-        }
 
 
 
-
-    }
-
-    @Throws(IOException::class)
-    private fun createImageFile(): File {
-        // Create an image file name
-        val timeStamp =
-            SimpleDateFormat("yyyyMMdd_HHmmss").format(Date())
-        val imageFileName = "JPEG_" + timeStamp + "_"
-        val storageDir = Environment.getExternalStoragePublicDirectory(
-            Environment.DIRECTORY_PICTURES
-        )
-        return File.createTempFile(
-            imageFileName,  /* prefix */
-            ".jpg",  /* suffix */
-            storageDir /* directory */
-        )
-    }
 
     override fun onSaveInstanceState(outState: Bundle) {
 
@@ -212,6 +173,12 @@ class MainActivity : AppCompatActivity() {
 
         super.onRestoreInstanceState(savedInstanceState)
         webView?.restoreState(savedInstanceState)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        val currentUrl: String? = webView?.url
+        saveURLString(this, currentUrl)
     }
 
     fun isOnline(): Boolean {
@@ -238,6 +205,44 @@ class MainActivity : AppCompatActivity() {
     }
 
 
+
+    private val onBackPressedCallback = object : OnBackPressedCallback(true) {
+        override fun handleOnBackPressed() {
+            if (webView != null && webView!!.canGoBack()) {
+                if (webView!!.canGoBack()) {
+                    webView!!.goBack()
+                }
+            } else{   showDialog()}
+            //showing dialog and then closing the application..
+
+        }
+    }
+
+    private fun showDialog(){
+        MaterialAlertDialogBuilder(this).apply {
+            setTitle("are you sure?")
+            setMessage("want to close the application ?")
+            setPositiveButton("Yes") { _, _ -> finish() }
+            setNegativeButton("No", null)
+            show()
+        }
+    }
+
+    fun showNotInternetDialog(){
+        MaterialAlertDialogBuilder(this).apply {
+            setIcon(R.drawable.icon_error)
+            setTitle("Error")
+            setMessage("Please, check your Internet connection status and restart app")
+            setPositiveButton("OK") { _, _ -> finish() }
+            show()
+        }
+
+    }
+
+    //override fun getOnBackInvokedDispatcher(): OnBackInvokedDispatcher {
+   //     return super.getOnBackInvokedDispatcher()
+  //  }
+
     companion object {
         private const val INPUT_FILE_REQUEST_CODE = 1
         private const val FILECHOOSER_RESULTCODE = 1
@@ -246,6 +251,7 @@ class MainActivity : AppCompatActivity() {
 
 const val PREFS_NAME = "TESTZADANIE"
 const val REMOTE_STRING = "REMOTESTRING"
+const val URLSTRING = "URLSTRING"
 const val DEFAULT_STRING = ""
 
 fun loadRemoteString(context: Context): String{
@@ -256,4 +262,24 @@ fun loadRemoteString(context: Context): String{
 
 fun saveRemoteString(context: Context, remoteString: String){
     val putstring = context.getSharedPreferences(PREFS_NAME, 0).edit().putString(REMOTE_STRING, remoteString).apply()
+}
+
+fun saveURLString(context: Context, url: String?){
+    if (url != null){
+        context.getSharedPreferences(PREFS_NAME, 0).edit().putString(URLSTRING, url).apply()
+    }
+}
+
+fun loadURLString(context: Context):String{
+    val prefs = context.getSharedPreferences(PREFS_NAME, 0)
+    val prefString = prefs.getString(URLSTRING, DEFAULT_STRING)
+    return  prefString ?: DEFAULT_STRING
+}
+
+class MyViewViewClient(val editText: EditText ): WebViewClient(){
+    override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
+        // your code here
+        editText.setText(url.toString())
+        super.doUpdateVisitedHistory(view, url, isReload)
+    }
 }

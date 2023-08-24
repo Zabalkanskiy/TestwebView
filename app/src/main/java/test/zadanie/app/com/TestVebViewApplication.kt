@@ -2,6 +2,7 @@ package test.zadanie.app.com
 
 import android.app.Application
 import android.content.Context
+import com.google.firebase.FirebaseApp
 import com.onesignal.OneSignal
 import com.onesignal.debug.LogLevel
 import com.yandex.metrica.YandexMetrica
@@ -33,7 +34,7 @@ class TestVebViewApplication: Application() {
 
 
         // Init FirebaseApp for all processes
-       // FirebaseApp.initializeApp(this)
+        FirebaseApp.initializeApp(this)
         // Creating an extended library configuration.
         // Creating an extended library configuration.
         val config = YandexMetricaConfig.newConfigBuilder(APP_METRICA_API_KEY).build()
